@@ -26,12 +26,12 @@ def Home():
 
 def _create_geojson(ret):
 
-    res = {'type' : 'FeatureCollection', 'features': []}
+    res = {'type': 'FeatureCollection', 'features': []}
     for r in ret:
         item = {
-          'type' : 'Feature',
-          'geometry':json.loads(r['geometry']),
-          'properties': {}
+            'type': 'Feature',
+            'geometry': json.loads(r['geometry']),
+            'properties': {}
         }
         for k, i in r.items():
             if not k == 'geometry':
