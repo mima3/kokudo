@@ -21,7 +21,7 @@ def setup(conf):
 
 @app.get('/')
 def Home():
-    return 'Kokudo page...'
+    return '以下のデータを利用して国土情報取得する。<BR>http://nlftp.mlit.go.jp/ksj/<BR>http://nlftp.mlit.go.jp/isj/index.html<BR>sediment_disaster_hazard_area.html<BR>'
 
 
 def _create_geojson(ret):
@@ -145,6 +145,70 @@ def get_station():
     operationCompany = request.query.operationCompany
     stationName = request.query.stationName
     ret = kokudo_db.get_station(railwayType, serviceProviderType, railwayLineName, operationCompany, stationName)
+
+    response.content_type = 'application/json;charset=utf-8'
+    res = _create_geojson(ret)
+    return json.dumps(res)
+
+
+@app.get('/json/get_pos_by_address')
+def get_pos_by_address():
+    """
+    住所から座標を取得する
+    """
+    address_list = request.query.address_list
+    ret = kokudo_db.convert_addresslist_to_pos(address_list)
+    response.content_type = 'application/json;charset=utf-8'
+    res = _create_geojson(ret)
+    return json.dumps(res)
+
+
+@app.get('/json/get_sediment_disaster_hazard_area_surface_by_geometry')
+def get_sediment_disaster_hazard_area_surface_by_geometry():
+    swlat = float(request.query.swlat)
+    swlng = float(request.query.swlng)
+    nelat = float(request.query.nelat)
+    nelng = float(request.query.nelng)
+    ret = kokudo_db.get_sediment_disaster_hazard_area_surface_by_geometry(swlng, swlat, nelng, nelat)
+
+    response.content_type = 'application/json;charset=utf-8'
+    res = _create_geojson(ret)
+    return json.dumps(res)
+
+
+@app.get('/json/get_sediment_disaster_hazard_area_line_by_geometry')
+def get_sediment_disaster_hazard_area_line_by_geometry():
+    swlat = float(request.query.swlat)
+    swlng = float(request.query.swlng)
+    nelat = float(request.query.nelat)
+    nelng = float(request.query.nelng)
+    ret = kokudo_db.get_sediment_disaster_hazard_area_line_by_geometry(swlng, swlat, nelng, nelat)
+
+    response.content_type = 'application/json;charset=utf-8'
+    res = _create_geojson(ret)
+    return json.dumps(res)
+
+
+@app.get('/json/get_sediment_disaster_hazard_area_point_by_geometry')
+def get_sediment_disaster_hazard_area_point_by_geometry():
+    swlat = float(request.query.swlat)
+    swlng = float(request.query.swlng)
+    nelat = float(request.query.nelat)
+    nelng = float(request.query.nelng)
+    ret = kokudo_db.get_sediment_disaster_hazard_area_point_by_geometry(swlng, swlat, nelng, nelat)
+
+    response.content_type = 'application/json;charset=utf-8'
+    res = _create_geojson(ret)
+    return json.dumps(res)
+
+
+@app.get('/json/get_expected_flood_area_by_geometry')
+def get_expected_flood_area_by_geometry():
+    swlat = float(request.query.swlat)
+    swlng = float(request.query.swlng)
+    nelat = float(request.query.nelat)
+    nelng = float(request.query.nelng)
+    ret = kokudo_db.get_expected_flood_area_by_geometry(swlng, swlat, nelng, nelat)
 
     response.content_type = 'application/json;charset=utf-8'
     res = _create_geojson(ret)
