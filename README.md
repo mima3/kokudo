@@ -57,6 +57,11 @@ easy_install peewee
 
     # 国土数値情報　浸水想定区域データ
     python import_expected_flood_area.py C:\tool\spatialite\mod_spatialite-4.2.0-win-x86\mod_spatialite.dll kokudo.sqlite .\original_data\A31-12\output
+
+    # 国土数値情報　突風等データ
+    python import_gust.py C:\tool\spatialite\mod_spatialite-4.2.0-win-x86\mod_spatialite.dll kokudo.sqlite .\original_data\A30b-11_GML
+
 http://127.0.0.1/kokudo/json/get_sediment_disaster_hazard_area_line_by_geometry?swlat=34.45&swlng=137.4&nelat=35.7&nelng=139.81
 http://127.0.0.1/kokudo/json/get_sediment_disaster_hazard_area_point_by_geometry?swlat=34.45&swlng=135.4&nelat=35.7&nelng=139.81
 http://127.0.0.1/kokudo/json/get_sediment_disaster_hazard_area_surface_by_geometry?swlat=35.45&swlng=139.4&nelat=35.7&nelng=139.81
+http://127.0.0.1/kokudo/json/get_gust_by_geometry?swlat=35.6537916853287&swlng=139.73208208935546&nelat=35.73743829568898&nelng=139.86941119091796

@@ -9,6 +9,7 @@ from kanji import convert_integerstring
 import glob
 import csv
 import StringIO
+import json
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/pyshp')
 import shapefile
@@ -194,8 +195,8 @@ class Gust(Model):
     fujitaScale = TextField()
     damageAreaWidth = TextField()
     damageAreaLength = TextField()
-    passingSpeed = IntegerField()
-    continuanceTime = IntegerField()
+    passingSpeed = FloatField()
+    continuanceTime = FloatField()
     rotationDirection = TextField()
     appearancePointType = TextField()
     atmosphericPressureDirection = TextField()
@@ -210,21 +211,21 @@ class GustDetail(Model):
     国土数値情報　竜巻等の突風データ の発生・消失の詳細
     """
     id = PrimaryKeyField()
-    gustNo = ForeignKeyField(Gust, related_name='details')
+    gust = ForeignKeyField(Gust, related_name='detail', db_column = 'gustNo')
     detailType = IntegerField()             # 0:発生 1:消失
-    occurrenceDate = DateField()            # データの発生日時
+    occurrenceDate = TextField()            # データの発生日時
     dateErrorRange = TextField()            # 誤差範囲
     prefectureName = TextField()
     cityName = TextField()
     address = TextField()
-    detailPoint = PointField()
     latErrorRage = TextField()
     longErrorRage = TextField()
+    geometry = PointField()
 
     class Meta:
         database = database_proxy
         indexes = (
-            (('gustNo', 'detailType'), True),
+            (('gust', 'detailType'), True),
         )
 
 
@@ -233,13 +234,13 @@ class GustMovementDirection(Model):
     国土数値情報　竜巻等の突風データ の当該竜巻等の突風移動方向
     """
     id = PrimaryKeyField()
-    gustNo = ForeignKeyField(Gust, related_name='movementDirections')
+    gust = ForeignKeyField(Gust, related_name='movementDirection', db_column = 'gustNo')
     movementDirection = TextField()
 
     class Meta:
         database = database_proxy
         indexes = (
-            (('gustNo', 'movementDirection'), False),
+            (('gust', 'movementDirection'), False),
         )
 
 class GustAtmosphericPressure(Model):
@@ -247,13 +248,13 @@ class GustAtmosphericPressure(Model):
     国土数値情報　竜巻等の突風データ の 総観場詳細 
     """
     id = PrimaryKeyField()
-    gustNo = ForeignKeyField(Gust, related_name='atmosphericPressures')
+    gust = ForeignKeyField(Gust, related_name='atmosphericPressures', db_column = 'gustNo')
     atmosphericPressureDirection = TextField()
 
     class Meta:
         database = database_proxy
         indexes = (
-            (('gustNo', 'atmosphericPressureDirection'), False),
+            (('gust', 'atmosphericPressureDirection'), False),
         )
 
 
@@ -299,7 +300,13 @@ def setup(path, spatialite_path, evn_sep=';'):
     @param env_sep 環境変数PATHの接続文字 WINDOWSは; LINUXは:
     """
     connect(path, spatialite_path, evn_sep)
-    database_proxy.create_tables([Address, ExpectedFloodAreaAttribute], True)
+    database_proxy.create_tables([
+        Address,
+        ExpectedFloodAreaAttribute,
+        Gust,
+        GustMovementDirection,
+        GustAtmosphericPressure
+    ], True)
     database_proxy.get_conn().execute('SELECT InitSpatialMetaData()')
 
     # 国土数値情報(行政区域)のモデル
@@ -431,6 +438,34 @@ def setup(path, spatialite_path, evn_sep=';'):
     """, (SRID,))
     database_proxy.get_conn().execute("""
         SELECT CreateSpatialIndex("ExpectedFloodArea", "geometry")
+    """)
+
+    # 竜巻等の突風データ 発生・消失の詳細のモデル
+    database_proxy.get_conn().execute("""
+        CREATE TABLE IF NOT EXISTS "GustDetail" (
+          "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+          "gustNo" INTEGER NOT NULL,
+          "detailType" INTEGER ,
+          "occurrenceDate" DATE ,
+          "dateErrorRange" TEXT ,
+          "prefectureName" TEXT ,
+          "cityName" TEXT ,
+          "address" TEXT ,
+          "latErrorRage" TEXT ,
+          "longErrorRage" TEXT ,
+          FOREIGN KEY ("gustNo") REFERENCES "gust" ("gustNo"));
+    """)
+    database_proxy.get_conn().execute("""
+        CREATE INDEX IF NOT EXISTS gustdetail_gustNo_detailType ON "GustDetail"("gustNo", "detailType");
+    """)
+    database_proxy.get_conn().execute("""
+        CREATE INDEX IF NOT EXISTS gustdetail_gustNo ON "GustDetail"("gustNo");
+    """)
+    database_proxy.get_conn().execute("""
+        Select AddGeometryColumn ("GustDetail", "geometry", ?, "POINT", 2);
+    """, (SRID,))
+    database_proxy.get_conn().execute("""
+        SELECT CreateSpatialIndex("GustDetail", "geometry")
     """)
 
 
@@ -1024,7 +1059,7 @@ expected_flood_area_attr_key_converter = {
   u'説明文' : 'description'
 }
 
-def import_expected_flood_area( prefecture_name, shape_path, attr_dir):
+def import_expected_flood_area(prefecture_name, shape_path, attr_dir):
     with database_proxy.transaction():
         ExpectedFloodArea.delete().filter(ExpectedFloodAreaAttribute.prefectureName==prefecture_name).execute()
         ExpectedFloodAreaAttribute.delete().filter(ExpectedFloodAreaAttribute.prefectureName==prefecture_name).execute()
@@ -1093,7 +1128,7 @@ def import_expected_flood_area( prefecture_name, shape_path, attr_dir):
 
 def get_expected_flood_area_by_geometry(xmin, ymin, xmax, ymax):
     """
-    選択した範囲に重なる土砂災害危険箇所データの取得
+    選択した範囲に重なる浸水想定区域データの取得
     @param table_name テーブル名
     @param xmin 取得範囲
     @param ymin 取得範囲
@@ -1118,6 +1153,7 @@ def get_expected_flood_area_by_geometry(xmin, ymin, xmax, ymax):
         );
     """ , (xmin, ymin, xmax, ymax))
     ret_geo = []
+    attr_list = []
     for r in rows:
         ret_geo.append({
             'PK_UID': r[0],
@@ -1126,4 +1162,258 @@ def get_expected_flood_area_by_geometry(xmin, ymin, xmax, ymax):
             'attributeId': r[3],
             'geometry': r[4]
         })
-    return ret_geo
+        key = u'' + r[1] + str(r[3])
+        if not key in attr_list:
+            attr_list.append(key)
+
+    query = ExpectedFloodAreaAttribute.select(
+        ExpectedFloodAreaAttribute
+    ).where(
+        R('(prefectureName || attributeId)') << attr_list
+    )
+    ret_attr = {}
+    for r in query:
+        ret_attr[r.prefectureName + r.attributeId] = {
+            'attributeId' : r.attributeId,
+            'prefectureName' : r.prefectureName,
+            'creatingType' : r.creatingType,
+            'creatingBody' : r.creatingBody,
+            'designatedDate' : r.designatedDate,
+            'announcementNumber' : r.announcementNumber,
+            'targetRiver' : r.targetRiver,
+            'designedStorm' : r.designedStorm,
+            'municipalGovernments' : r.municipalGovernments,
+            'description' : r.description,
+            'remarks' : r.remarks
+        }
+    return ret_geo, ret_attr
+
+
+def import_gust(appearance_point_shape_path, disappearance_point_shape_path):
+    sfAppearance = shapefile.Reader(appearance_point_shape_path)
+    sfDisappearance = shapefile.Reader(disappearance_point_shape_path)
+
+    appearanceShapeRecs = sfAppearance.iterShapeRecords()
+    disappearanceShapeRecs = sfDisappearance.iterShapeRecords()
+
+
+    with database_proxy.transaction():
+        GustDetail.delete().execute()
+        GustMovementDirection.delete().execute()
+        GustAtmosphericPressure.delete().execute()
+        Gust.delete().execute()
+
+        for sr in appearanceShapeRecs:
+            gust = Gust.create(
+                gustNo = sr.record[0],
+                type = sr.record[1].decode('cp932'),
+                fujitaScale = sr.record[12].decode('cp932'),
+                damageAreaWidth = sr.record[13].decode('cp932'),
+                damageAreaLength = sr.record[14].decode('cp932'),
+                passingSpeed = sr.record[17],
+                continuanceTime = sr.record[18],
+                rotationDirection = sr.record[19].decode('cp932'),
+                appearancePointType = sr.record[20].decode('cp932'),
+                atmosphericPressureDirection = sr.record[24].decode('cp932'),
+                feature = sr.record[25].decode('cp932')
+            )
+
+            # 竜巻等の突風データ の当該竜巻等の突風移動方向を作成
+            GustMovementDirection.create(
+                gust = gust,
+                movementDirection = sr.record[15].decode('cp932')
+            )
+            GustMovementDirection.create(
+                gust = gust,
+                movementDirection = sr.record[16].decode('cp932')
+            )
+
+            # 竜巻等の突風データ の当該竜巻等の突風移動方向を作成
+            GustAtmosphericPressure.create(
+                gust = gust,
+                atmosphericPressureDirection = sr.record[21].decode('cp932')
+            )
+            GustAtmosphericPressure.create(
+                gust = gust,
+                atmosphericPressureDirection = sr.record[22].decode('cp932')
+            )
+            GustAtmosphericPressure.create(
+                gust = gust,
+                atmosphericPressureDirection = sr.record[23].decode('cp932')
+            )
+
+            database_proxy.get_conn().execute(
+                """
+                INSERT INTO GustDetail
+                  (
+                      gustNo,
+                      detailType,
+                      occurrenceDate,
+                      dateErrorRange,
+                      prefectureName,
+                      cityName,
+                      address,
+                      latErrorRage,
+                      longErrorRage,
+                      geometry
+                  )
+                VALUES
+                  (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    GeometryFromText(?, ?))
+                """,
+                (
+                    sr.record[0],
+                    0,
+                    sr.record[2].decode('cp932'),
+                    sr.record[3].decode('cp932'),
+                    sr.record[4].decode('cp932'),
+                    sr.record[5].decode('cp932'),
+                    sr.record[6].decode('cp932'),
+                    sr.record[26].decode('cp932'),
+                    sr.record[27].decode('cp932'),
+                    _makeGeometryString('POINT', sr.shape), SRID
+                )
+            )
+
+        for sr in disappearanceShapeRecs:
+            database_proxy.get_conn().execute(
+                """
+                INSERT INTO GustDetail
+                  (
+                      gustNo,
+                      detailType,
+                      occurrenceDate,
+                      dateErrorRange,
+                      prefectureName,
+                      cityName,
+                      address,
+                      latErrorRage,
+                      longErrorRage,
+                      geometry
+                  )
+                VALUES
+                  (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    GeometryFromText(?, ?))
+                """,
+                (
+                    sr.record[0],
+                    1,
+                    sr.record[7].decode('cp932'),
+                    sr.record[8].decode('cp932'),
+                    sr.record[9].decode('cp932'),
+                    sr.record[10].decode('cp932'),
+                    sr.record[11].decode('cp932'),
+                    sr.record[30].decode('cp932'),
+                    sr.record[31].decode('cp932'),
+                    _makeGeometryString('POINT', sr.shape), SRID
+                )
+            )
+
+        database_proxy.commit()
+
+
+def get_gust_by_geometry(xmin, ymin, xmax, ymax):
+    """
+    選択した範囲に重なる竜巻等の突風データの取得
+    @param table_name テーブル名
+    @param xmin 取得範囲
+    @param ymin 取得範囲
+    @param xmax 取得範囲
+    @param ymax 取得範囲
+    @return 取得した結果
+    """
+    rows = database_proxy.get_conn().execute("""
+      SELECT
+        gustNo,
+        detailType,
+        occurrenceDate,
+        dateErrorRange,
+        prefectureName,
+        cityName,
+        address,
+        latErrorRage,
+        longErrorRage,
+        AsGeoJson(geometry)
+      FROM
+        GustDetail
+        inner join idx_GustDetail_geometry ON pkid = GustDetail.id
+      WHERE
+          MBROverlaps(
+            BuildMBR(xmin,ymin,xmax,ymax),
+            BuildMBR(?, ?, ?, ?)
+        );
+    """ , (xmin, ymin, xmax, ymax))
+    detail_dic = {}
+    for r in rows:
+        if not r[0] in detail_dic:
+            detail_dic[r[0]] = []
+        detail_dic[r[0]].append({
+            'detailType' : r[1],
+            'occurrenceDate' : r[2],
+            'dateErrorRange' : r[3],
+            'prefectureName' : r[4],
+            'cityName' : r[5],
+            'address' : r[6],
+            'latErrorRage' : r[7],
+            'longErrorRage' : r[8],
+            'geometry'  : json.loads(r[9])
+        })
+
+    gustno_list = detail_dic.keys()
+
+    query = GustMovementDirection.select(GustMovementDirection, Gust).join(Gust).where(GustMovementDirection.gust << gustno_list)
+    movement_dic = {}
+    for mv in query:
+        if not mv.gust.gustNo in movement_dic:
+            movement_dic[mv.gust.gustNo] = []
+        movement_dic[mv.gust.gustNo].append({
+            'movementDirection' : mv.movementDirection
+        })
+
+    query = GustAtmosphericPressure.select(GustAtmosphericPressure, Gust).join(Gust).where(GustAtmosphericPressure.gust << gustno_list)
+    atmospheric_dic = {}
+    for at in query:
+        if not at.gust.gustNo in atmospheric_dic:
+            atmospheric_dic[at.gust.gustNo] = []
+        atmospheric_dic[at.gust.gustNo].append({
+            'atmosphericPressureDirection' : at.atmosphericPressureDirection
+        })
+
+    query = Gust.select().where(Gust.gustNo << gustno_list)
+    res = {}
+    for gust in query:
+        res[gust.gustNo] = {
+            'type' : gust.type,
+            'fujitaScale' : gust.fujitaScale,
+            'damageAreaWidth' : gust.damageAreaWidth,
+            'damageAreaLength' : gust.damageAreaLength,
+            'passingSpeed' : gust.passingSpeed,
+            'continuanceTime' : gust.continuanceTime,
+            'rotationDirection' : gust.rotationDirection,
+            'appearancePointType' :  gust.appearancePointType,
+            'atmosphericPressureDirection' : gust.atmosphericPressureDirection,
+            'feature' : gust.feature,
+            'detail' : detail_dic[gust.gustNo],
+            'movementDirection' : movement_dic[gust.gustNo],
+            'atmosphericPressureDirection' : atmospheric_dic[gust.gustNo]
+        }
+
+    return res

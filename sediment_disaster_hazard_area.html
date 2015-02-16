@@ -17,7 +17,8 @@
 </head>
 <body>
   <div id="contents">
-    <p>ドラッグしてください</p>
+    <p>この画面は「<a href="http://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-A31.html">国土数値情報　土砂災害危険箇所データ</a>」を表示するものです。</p>
+    <p>ドラッグで表示領域を変更し、データを取得します。</p>
     <div id="map_canvas" style="width: 800px; height: 600px"></div>
   </div>
 <script type="text/javascript">
@@ -149,8 +150,8 @@ $(function() {
               marker.setMap(map);
               google.maps.event.addListener(marker, "click", function() {
                 var infowindow = new google.maps.InfoWindow({
-                content: feature.properties.remarks + <BR> + areaType[feature.properties.hazardAreaType].name
-              });
+                  content: feature.properties.remarks + '<BR>' + areaType[feature.properties.hazardAreaType].name
+                });
                 infowindow.open(map, marker);
               });
             });

@@ -21,7 +21,7 @@ def setup(conf):
 
 @app.get('/')
 def Home():
-    return '以下のデータを利用して国土情報取得する。<BR>http://nlftp.mlit.go.jp/ksj/<BR>http://nlftp.mlit.go.jp/isj/index.html<BR>sediment_disaster_hazard_area.html<BR>'
+    return template('home').replace('\n', '')
 
 
 def _create_geojson(ret):
@@ -208,8 +208,23 @@ def get_expected_flood_area_by_geometry():
     swlng = float(request.query.swlng)
     nelat = float(request.query.nelat)
     nelng = float(request.query.nelng)
-    ret = kokudo_db.get_expected_flood_area_by_geometry(swlng, swlat, nelng, nelat)
+    ret_geo, ret_attr = kokudo_db.get_expected_flood_area_by_geometry(swlng, swlat, nelng, nelat)
 
     response.content_type = 'application/json;charset=utf-8'
-    res = _create_geojson(ret)
-    return json.dumps(res)
+    res = _create_geojson(ret_geo)
+    return json.dumps({
+        'geojson' : res, 
+        'attribute' : ret_attr
+    })
+
+
+@app.get('/json/get_gust_by_geometry')
+def get_gust_by_geometry():
+    swlat = float(request.query.swlat)
+    swlng = float(request.query.swlng)
+    nelat = float(request.query.nelat)
+    nelng = float(request.query.nelng)
+    ret = kokudo_db.get_gust_by_geometry(swlng, swlat, nelng, nelat)
+
+    response.content_type = 'application/json;charset=utf-8'
+    return json.dumps(ret)

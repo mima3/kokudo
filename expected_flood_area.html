@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html lang="ja">
 <head>
-  <title>土砂災害危険箇所データ</title>
+  <title>国土数値情報　浸水想定区域データ</title>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="js/select2/select2.css" type="text/css" />
   <link rel="stylesheet" href="js/jquery/jquery-ui.min.css" type="text/css" />
@@ -17,7 +17,8 @@
 </head>
 <body>
   <div id="contents">
-    <p>ドラッグしてください</p>
+    <p>この画面は「<a href="http://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-A26.html">国土数値情報　浸水想定区域</a>」を表示するものです。</p>
+    <p>ドラッグで表示領域を変更し、データを取得します。</p>
     <div id="map_canvas" style="width: 800px; height: 600px"></div>
   </div>
 <script type="text/javascript">
@@ -39,6 +40,8 @@ $(function() {
     var map = new google.maps.Map(document.getElementById("map_canvas"), opts);
     var features = [];
     var markers = [];
+    var attribute;
+
     var waterDepthDict = {
       11: {name:'0～0.5ｍ未満', color:'#ccccff'},
       12: {name:'0.5～1.0ｍ未満', color:'#aaaaff'},
@@ -56,6 +59,18 @@ $(function() {
     };
 
     map.data.addListener('click', function(e) {
+      var key = e.feature.getProperty('prefectureName') + e.feature.getProperty('attributeId');
+      var s = 'waterDepth:' + e.feature.getProperty('waterDepth');
+      s += '\n' + attribute[key].creatingType;
+      s += '\n' + attribute[key].creatingBody;
+      s += '\n' + attribute[key].designatedDate;
+      s += '\n' + attribute[key].announcementNumber;
+      s += '\n' + attribute[key].targetRiver;
+      s += '\n' + attribute[key].designedStorm;
+      s += '\n' + attribute[key].municipalGovernments;
+      s += '\n' + attribute[key].description;
+      s += '\n' + attribute[key].remarks;
+      alert(s);
       //alert(areaType[e.feature.getProperty('hazardAreaType')].name + '\n' + e.feature.getProperty('remarks'));
       //console.log(areaType[e.feature.getProperty('hazardAreaType')].name, e.feature.getProperty('remarks'));
     });
@@ -99,7 +114,8 @@ $(function() {
           },
           function (res) {
             console.log('getExpectedFloodAarea', res);
-            features = features.concat(map.data.addGeoJson(res));
+            features = features.concat(map.data.addGeoJson(res.geojson));
+            attribute = res.attribute;
             map.data.setStyle(styleFeature());
             callback(null, null);
           },
