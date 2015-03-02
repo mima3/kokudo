@@ -10,6 +10,7 @@ import urllib
 import kokudo_db
 import peewee
 import math
+import gsi_api
 
 
 app = Bottle()
@@ -18,6 +19,7 @@ app = Bottle()
 def setup(conf):
     global app
     kokudo_db.connect(conf.get('database', 'path'), conf.get('database', 'mod_path'), conf.get('database', 'sep'))
+    gsi_api.setup(conf.get('gsi_database', 'path'))
 
 
 @app.get('/')
@@ -157,10 +159,19 @@ def get_railroad_section():
     serviceProviderType = request.query.serviceProviderType
     railwayLineName = request.query.railwayLineName
     operationCompany = request.query.operationCompany
+
+    embed_elevation = False
+    if request.query.embed_elevation:
+        embed_elevation = True
+
     ret = kokudo_db.get_railroad_section(railwayType, serviceProviderType, railwayLineName, operationCompany)
 
     response.content_type = 'application/json;charset=utf-8'
+    response.set_header('Access-Control-Allow-Origin', '*')
+
     res = _create_geojson(ret)
+    if embed_elevation:
+        res = gsi_api.convert_geojson(res)
     return json.dumps(res)
 
 
