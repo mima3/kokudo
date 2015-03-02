@@ -9,6 +9,7 @@ import cgi
 import urllib
 import kokudo_db
 import peewee
+import math
 
 
 app = Bottle()
@@ -40,6 +41,32 @@ def _create_geojson(ret):
     return res
 
 
+def _str_isfloat(str):
+    """
+    floatに変換できるかチェック
+    """
+    try:
+        float(str)
+        return True
+    except ValueError:
+        return False
+
+
+def _check_parameter_geometry(swlng, swlat, nelng, nelat, maxrange):
+    """
+    ジオメトリー用のパラメータのチェック
+    """
+    if (not _str_isfloat(swlat) or
+        not _str_isfloat(swlng) or
+        not _str_isfloat(nelat) or
+        not _str_isfloat(nelng)):
+        return 'wrong parameter type'
+
+    if ((math.fabs(float(swlat) - float(nelat)) + math.fabs(float(swlng) - float(nelng))) > maxrange):
+        return 'wrong parameter range'
+    return None
+
+
 @app.get('/json/get_administrative_district')
 def get_administrative_district():
     prefectureName = request.query.prefectureName
@@ -57,10 +84,23 @@ def get_administrative_district():
 
 @app.get('/json/get_administrative_district_by_geometry')
 def get_administrative_district_by_geometry():
-    swlat = float(request.query.swlat)
-    swlng = float(request.query.swlng)
-    nelat = float(request.query.nelat)
-    nelng = float(request.query.nelng)
+    swlat = request.query.swlat
+    swlng = request.query.swlng
+    nelat = request.query.nelat
+    nelng = request.query.nelng
+    err = _check_parameter_geometry(swlng, swlat, nelng, nelat, 999999)
+    response.set_header('Access-Control-Allow-Origin', '*')
+
+    if err:
+        response.content_type = 'application/json;charset=utf-8'
+        response.status = 400
+        return json.dumps({'message': err})
+
+    swlat = float(swlat)
+    swlng = float(swlng)
+    nelat = float(nelat)
+    nelng = float(nelng)
+
     ret = kokudo_db.get_administrative_district_by_geometry(swlng, swlat, nelng, nelat)
 
     response.content_type = 'application/json;charset=utf-8'
